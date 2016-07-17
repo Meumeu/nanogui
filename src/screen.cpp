@@ -1,5 +1,5 @@
 /*
-    src/screen.cpp -- Top-level widget and interface between NanoGUI and GLFW
+    src/screen.cpp -- Top-level widget and interface between NanoGUI and SDL
 
     A significant redesign of this code was contributed by Christian Schueller.
 
@@ -24,9 +24,6 @@
 #undef APIENTRY
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
-#define GLFW_EXPOSE_NATIVE_WGL
-#define GLFW_EXPOSE_NATIVE_WIN32
-#include <GLFW/glfw3native.h>
 #endif
 
 /* Allow enforcing the GL2 implementation of NanoVG */
@@ -35,16 +32,18 @@
 
 NAMESPACE_BEGIN(nanogui)
 
-std::map<GLFWwindow *, Screen *> __nanogui_screens;
+std::map<Uint32, Screen *> __nanogui_screens;
 
 #if defined(NANOGUI_GLAD)
 static bool gladInitialized = false;
 #endif
 
 /* Calculate pixel ratio for hi-dpi devices. */
-static float get_pixel_ratio(GLFWwindow *window) {
+static float get_pixel_ratio(SDL_Window *window) {
 #if defined(_WIN32)
-    HWND hWnd = glfwGetWin32Window(window);
+    SDL_SysWMinfo info;
+    SDL_GetWindowWMInfo(window, &info);
+    HWND hWnd = info.win.window;
     HMONITOR monitor = MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST);
     /* The following function only exists on Windows 8.1+, but we don't want to make that a dependency */
     static HRESULT (WINAPI *GetDpiForMonitor_)(HMONITOR, UINT, UINT*, UINT*) = nullptr;
@@ -65,76 +64,74 @@ static float get_pixel_ratio(GLFWwindow *window) {
     return 1.f;
 #else
     Vector2i fbSize, size;
-    glfwGetFramebufferSize(window, &fbSize[0], &fbSize[1]);
-    glfwGetWindowSize(window, &size[0], &size[1]);
+    SDL_GL_GetDrawableSize(window, &fbSize[0], &fbSize[1]);
+    SDL_GetWindowSize(window, &size[0], &size[1]);
     return (float)fbSize[0] / (float)size[0];
 #endif
 }
 Screen::Screen()
-    : Widget(nullptr), mGLFWWindow(nullptr), mNVGContext(nullptr),
-      mCursor(Cursor::Arrow), mBackground(0.3f, 0.3f, 0.32f),
-      mShutdownGLFWOnDestruct(false), mFullscreen(false) {
-    memset(mCursors, 0, sizeof(GLFWcursor *) * (int) Cursor::CursorCount);
-}
+  : Widget(nullptr), mSDLWindow(nullptr), mSDLGLContext(nullptr), mNVGContext(nullptr),
+    mCursor(Cursor::Arrow), mBackground(0.3f, 0.3f, 0.32f),
+    mShutdownSDLOnDestruct(true), mFullscreen(false) {
+    memset(mCursors, 0, sizeof(SDL_Cursor *) * (int) Cursor::CursorCount);}
 
 Screen::Screen(const Vector2i &size, const std::string &caption, bool resizable,
                bool fullscreen, int colorBits, int alphaBits, int depthBits,
                int stencilBits, int nSamples,
                unsigned int glMajor, unsigned int glMinor)
-    : Widget(nullptr), mGLFWWindow(nullptr), mNVGContext(nullptr),
+    : Widget(nullptr), mSDLWindow(nullptr), mSDLGLContext(nullptr), mNVGContext(nullptr),
       mCursor(Cursor::Arrow), mBackground(0.3f, 0.3f, 0.32f), mCaption(caption),
-      mShutdownGLFWOnDestruct(false), mFullscreen(fullscreen) {
-    memset(mCursors, 0, sizeof(GLFWcursor *) * (int) Cursor::CursorCount);
+      mShutdownSDLOnDestruct(false), mFullscreen(fullscreen) {
+    memset(mCursors, 0, sizeof(SDL_Cursor *) * (int) Cursor::CursorCount);
 
     /* Request a forward compatible OpenGL glMajor.glMinor core profile context.
        Default value is an OpenGL 3.3 core profile context. */
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, glMajor);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, glMinor);
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, glMajor);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, glMinor);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 
-    glfwWindowHint(GLFW_SAMPLES, nSamples);
-    glfwWindowHint(GLFW_RED_BITS, colorBits);
-    glfwWindowHint(GLFW_GREEN_BITS, colorBits);
-    glfwWindowHint(GLFW_BLUE_BITS, colorBits);
-    glfwWindowHint(GLFW_ALPHA_BITS, alphaBits);
-    glfwWindowHint(GLFW_STENCIL_BITS, stencilBits);
-    glfwWindowHint(GLFW_DEPTH_BITS, depthBits);
-    glfwWindowHint(GLFW_VISIBLE, GL_FALSE);
-    glfwWindowHint(GLFW_RESIZABLE, resizable ? GL_TRUE : GL_FALSE);
-
+    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, nSamples);
+    SDL_GL_SetAttribute(SDL_GL_RED_SIZE, colorBits);
+    SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, colorBits);
+    SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, colorBits);
+    SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, alphaBits);
+    SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, stencilBits);
+    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, depthBits);
     if (fullscreen) {
-        GLFWmonitor *monitor = glfwGetPrimaryMonitor();
-        const GLFWvidmode *mode = glfwGetVideoMode(monitor);
-        mGLFWWindow = glfwCreateWindow(mode->width, mode->height,
-                                       caption.c_str(), monitor, nullptr);
+        mSDLWindow = SDL_CreateWindow(caption.c_str(), SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, size.x(), size.y(), SDL_WINDOW_OPENGL | SDL_WINDOW_FULLSCREEN_DESKTOP);
+    } else if (resizable) {
+        mSDLWindow = SDL_CreateWindow(caption.c_str(), SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, size.x(), size.y(), SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
     } else {
-        mGLFWWindow = glfwCreateWindow(size.x(), size.y(),
-                                       caption.c_str(), nullptr, nullptr);
+        mSDLWindow = SDL_CreateWindow(caption.c_str(), SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, size.x(), size.y(), SDL_WINDOW_OPENGL);
     }
 
-    if (!mGLFWWindow)
+    if (!mSDLWindow)
+        throw std::runtime_error(std::string("Cannot create window: ") + SDL_GetError());
+
+    mSDLGLContext = SDL_GL_CreateContext(mSDLWindow);
+    if (!mSDLGLContext)
         throw std::runtime_error("Could not create an OpenGL " +
                                  std::to_string(glMajor) + "." +
-                                 std::to_string(glMinor) + " context!");
-
-    glfwMakeContextCurrent(mGLFWWindow);
+                                 std::to_string(glMinor) + " context: " + SDL_GetError());
 
 #if defined(NANOGUI_GLAD)
     if (!gladInitialized) {
         gladInitialized = true;
-        if (!gladLoadGLLoader((GLADloadproc) glfwGetProcAddress))
+        if (!gladLoadGLLoader((GLADloadproc) SDL_GL_GetProcAddress))
             throw std::runtime_error("Could not initialize GLAD!");
         glGetError(); // pull and ignore unhandled errors like GL_INVALID_ENUM
     }
 #endif
 
-    glfwGetFramebufferSize(mGLFWWindow, &mFBSize[0], &mFBSize[1]);
+    SDL_GL_MakeCurrent(mSDLWindow, mSDLGLContext);
+    SDL_GL_SetSwapInterval(1);
+
+    SDL_GL_GetDrawableSize(mSDLWindow, &mFBSize[0], &mFBSize[1]);
     glViewport(0, 0, mFBSize[0], mFBSize[1]);
     glClearColor(mBackground[0], mBackground[1], mBackground[2], 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-    glfwSwapInterval(0);
-    glfwSwapBuffers(mGLFWWindow);
+    SDL_GL_SwapWindow(mSDLWindow);
 
 #if defined(__APPLE__)
     /* Poll for events once before starting a potentially
@@ -142,114 +139,25 @@ Screen::Screen(const Vector2i &size, const std::string &caption, bool resizable,
        classified as "interactive" by other software such
        as iTerm2 */
 
-    glfwPollEvents();
+    SDL_Event e;
+    SDL_PollEvent(&e);
 #endif
 
-    /* Propagate GLFW events to the appropriate Screen instance */
-    glfwSetCursorPosCallback(mGLFWWindow,
-        [](GLFWwindow *w, double x, double y) {
-            auto it = __nanogui_screens.find(w);
-            if (it == __nanogui_screens.end())
-                return;
-            Screen *s = it->second;
-            if (!s->mProcessEvents)
-                return;
-            s->cursorPosCallbackEvent(x, y);
-        }
-    );
-
-    glfwSetMouseButtonCallback(mGLFWWindow,
-        [](GLFWwindow *w, int button, int action, int modifiers) {
-            auto it = __nanogui_screens.find(w);
-            if (it == __nanogui_screens.end())
-                return;
-            Screen *s = it->second;
-            if (!s->mProcessEvents)
-                return;
-            s->mouseButtonCallbackEvent(button, action, modifiers);
-        }
-    );
-
-    glfwSetKeyCallback(mGLFWWindow,
-        [](GLFWwindow *w, int key, int scancode, int action, int mods) {
-            auto it = __nanogui_screens.find(w);
-            if (it == __nanogui_screens.end())
-                return;
-            Screen *s = it->second;
-            if (!s->mProcessEvents)
-                return;
-            s->keyCallbackEvent(key, scancode, action, mods);
-        }
-    );
-
-    glfwSetCharCallback(mGLFWWindow,
-        [](GLFWwindow *w, unsigned int codepoint) {
-            auto it = __nanogui_screens.find(w);
-            if (it == __nanogui_screens.end())
-                return;
-            Screen *s = it->second;
-            if (!s->mProcessEvents)
-                return;
-            s->charCallbackEvent(codepoint);
-        }
-    );
-
-    glfwSetDropCallback(mGLFWWindow,
-        [](GLFWwindow *w, int count, const char **filenames) {
-            auto it = __nanogui_screens.find(w);
-            if (it == __nanogui_screens.end())
-                return;
-            Screen *s = it->second;
-            if (!s->mProcessEvents)
-                return;
-            s->dropCallbackEvent(count, filenames);
-        }
-    );
-
-    glfwSetScrollCallback(mGLFWWindow,
-        [](GLFWwindow *w, double x, double y) {
-            auto it = __nanogui_screens.find(w);
-            if (it == __nanogui_screens.end())
-                return;
-            Screen *s = it->second;
-            if (!s->mProcessEvents)
-                return;
-            s->scrollCallbackEvent(x, y);
-        }
-    );
-
-    /* React to framebuffer size events -- includes window
-       size events and also catches things like dragging
-       a window from a Retina-capable screen to a normal
-       screen on Mac OS X */
-    glfwSetFramebufferSizeCallback(mGLFWWindow,
-        [](GLFWwindow* w, int width, int height) {
-            auto it = __nanogui_screens.find(w);
-            if (it == __nanogui_screens.end())
-                return;
-            Screen* s = it->second;
-
-            if (!s->mProcessEvents)
-                return;
-
-            s->resizeCallbackEvent(width, height);
-        }
-    );
-
-    initialize(mGLFWWindow, true);
+    initialize(mSDLWindow, mSDLGLContext, true);
 }
 
-void Screen::initialize(GLFWwindow *window, bool shutdownGLFWOnDestruct) {
-    mGLFWWindow = window;
-    mShutdownGLFWOnDestruct = shutdownGLFWOnDestruct;
-    glfwGetWindowSize(mGLFWWindow, &mSize[0], &mSize[1]);
-    glfwGetFramebufferSize(mGLFWWindow, &mFBSize[0], &mFBSize[1]);
+void Screen::initialize(SDL_Window *window, SDL_GLContext context, bool shutdownSDLOnDestruct) {
+    mSDLWindow = window;
+    mSDLGLContext = context;
+    mShutdownSDLOnDestruct = shutdownSDLOnDestruct;
+    SDL_GetWindowSize(mSDLWindow, &mSize[0], &mSize[1]);
+    SDL_GL_GetDrawableSize(mSDLWindow, &mFBSize[0], &mFBSize[1]);
 
     mPixelRatio = get_pixel_ratio(window);
 
 #if defined(_WIN32)
     if (mPixelRatio != 1 && !mFullscreen)
-        glfwSetWindowSize(window, mSize.x() * mPixelRatio, mSize.y() * mPixelRatio);
+        SDL_SetWindowSize(window, mSize.x() * mPixelRatio, mSize.y() * mPixelRatio);
 #endif
 
     /* Detect framebuffer properties and set up compatible NanoVG context */
@@ -271,29 +179,41 @@ void Screen::initialize(GLFWwindow *window, bool shutdownGLFWOnDestruct) {
     if (mNVGContext == nullptr)
         throw std::runtime_error("Could not initialize NanoVG!");
 
-    mVisible = glfwGetWindowAttrib(window, GLFW_VISIBLE) != 0;
+    mVisible = (SDL_GetWindowFlags(mSDLWindow) & SDL_WINDOW_SHOWN) != 0;
     setTheme(new Theme(mNVGContext));
     mMousePos = Vector2i::Zero();
     mMouseState = mModifiers = 0;
     mDragActive = false;
-    mLastInteraction = glfwGetTime();
+    mLastInteraction = SDL_GetTicks() / 1000.0;
     mProcessEvents = true;
-    __nanogui_screens[mGLFWWindow] = this;
+    __nanogui_screens[SDL_GetWindowID(mSDLWindow)] = this;
 
-    for (int i=0; i < (int) Cursor::CursorCount; ++i)
-        mCursors[i] = glfwCreateStandardCursor(GLFW_ARROW_CURSOR + i);
+    mCursors[(int)Cursor::Arrow] = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_ARROW);
+    mCursors[(int)Cursor::IBeam] = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_IBEAM);
+    mCursors[(int)Cursor::Crosshair] = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_CROSSHAIR);
+    mCursors[(int)Cursor::Hand] = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_HAND);
+    mCursors[(int)Cursor::HResize] = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_SIZEWE);
+    mCursors[(int)Cursor::VResize] = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_SIZENS);
 }
 
 Screen::~Screen() {
-    __nanogui_screens.erase(mGLFWWindow);
+    __nanogui_screens.erase(SDL_GetWindowID(mSDLWindow));
     for (int i=0; i < (int) Cursor::CursorCount; ++i) {
         if (mCursors[i])
-            glfwDestroyCursor(mCursors[i]);
+            SDL_FreeCursor(mCursors[i]);
     }
+
     if (mNVGContext)
         nvgDeleteGL3(mNVGContext);
-    if (mGLFWWindow && mShutdownGLFWOnDestruct)
-        glfwDestroyWindow(mGLFWWindow);
+
+    if (mShutdownSDLOnDestruct)
+    {
+        if (mSDLGLContext)
+            SDL_GL_DeleteContext(mSDLGLContext);
+
+        if (mSDLWindow)
+            SDL_DestroyWindow(mSDLWindow);
+    }
 }
 
 void Screen::setVisible(bool visible) {
@@ -301,22 +221,22 @@ void Screen::setVisible(bool visible) {
         mVisible = visible;
 
         if (visible)
-            glfwShowWindow(mGLFWWindow);
+            SDL_ShowWindow(mSDLWindow);
         else
-            glfwHideWindow(mGLFWWindow);
+            SDL_HideWindow(mSDLWindow);
     }
 }
 
 void Screen::setCaption(const std::string &caption) {
     if (caption != mCaption) {
-        glfwSetWindowTitle(mGLFWWindow, caption.c_str());
+        SDL_SetWindowTitle(mSDLWindow, caption.c_str());
         mCaption = caption;
     }
 }
 
 void Screen::setSize(const Vector2i &size) {
     Widget::setSize(size);
-    glfwSetWindowSize(mGLFWWindow, size.x(), size.y());
+    SDL_SetWindowSize(mSDLWindow, size.x(), size.y());
 }
 
 void Screen::drawAll() {
@@ -326,24 +246,26 @@ void Screen::drawAll() {
     drawContents();
     drawWidgets();
 
-    glfwSwapBuffers(mGLFWWindow);
+    SDL_GL_SwapWindow(mSDLWindow);
 }
 
 void Screen::drawWidgets() {
     if (!mVisible)
         return;
 
-    glfwMakeContextCurrent(mGLFWWindow);
-    float newPixelRatio = get_pixel_ratio(mGLFWWindow);
+    SDL_GL_MakeCurrent(mSDLWindow, mSDLGLContext);
+    SDL_GetWindowSize(mSDLWindow, &mSize[0], &mSize[1]);
+    SDL_GL_GetDrawableSize(mSDLWindow, &mFBSize[0], &mFBSize[1]);
+    float newPixelRatio = get_pixel_ratio(mSDLWindow);
 
 #if defined(_WIN32)
     if (mPixelRatio != newPixelRatio && !mFullscreen)
-        glfwSetWindowSize(mGLFWWindow, mSize.x() * newPixelRatio / mPixelRatio, mSize.y() * newPixelRatio / mPixelRatio);
+        SDL_SetWindowSize(mSDLWindow, mSize.x() * newPixelRatio / mPixelRatio, mSize.y() * newPixelRatio / mPixelRatio);
 #endif
 
     mPixelRatio = newPixelRatio;
-    glfwGetFramebufferSize(mGLFWWindow, &mFBSize[0], &mFBSize[1]);
-    glfwGetWindowSize(mGLFWWindow, &mSize[0], &mSize[1]);
+    SDL_GL_GetDrawableSize(mSDLWindow, &mFBSize[0], &mFBSize[1]);
+    SDL_GetWindowSize(mSDLWindow, &mSize[0], &mSize[1]);
 
 #if defined(_WIN32)
     mSize /= mPixelRatio;
@@ -357,7 +279,7 @@ void Screen::drawWidgets() {
 
     draw(mNVGContext);
 
-    double elapsed = glfwGetTime() - mLastInteraction;
+    double elapsed = SDL_GetTicks() / 1000.0 - mLastInteraction;
 
     if (elapsed > 0.5f) {
         /* Draw tooltips */
@@ -402,6 +324,73 @@ void Screen::drawWidgets() {
     nvgEndFrame(mNVGContext);
 }
 
+void Screen::onEvent(SDL_Event& event)
+{
+  if (!mProcessEvents)
+    return;
+
+  switch( event.type )
+    {
+    case SDL_MOUSEMOTION:
+    {
+      cursorPosCallbackEvent(event.motion.x, event.motion.y);
+    }
+    break;
+
+    case SDL_MOUSEBUTTONDOWN:
+    case SDL_MOUSEBUTTONUP:
+    {
+      SDL_Keymod mods = SDL_GetModState();
+      mouseButtonCallbackEvent(event.button.button, event.button.type, mods);
+    }
+    break;
+
+    case SDL_KEYDOWN:
+    case SDL_KEYUP:
+    {
+      keyCallbackEvent(event.key.keysym.sym, event.key.keysym.scancode, event.key.state, event.key.keysym.mod);
+    }
+    break;
+
+    case SDL_TEXTINPUT:
+    {
+      charCallbackEvent(event.text.text[0]);
+    }
+    break;
+
+    case SDL_MOUSEWHEEL:
+    {
+      if (event.wheel.direction == SDL_MOUSEWHEEL_NORMAL)
+	scrollCallbackEvent(event.wheel.x, event.wheel.y);
+      else
+	scrollCallbackEvent(-event.wheel.x, -event.wheel.y);
+    }
+    break;
+
+    case SDL_WINDOWEVENT:
+    {
+      switch(event.window.event)
+      {
+      case SDL_WINDOWEVENT_SIZE_CHANGED:
+	resizeCallbackEvent(event.window.data1, event.window.data2);
+	break;
+      case SDL_WINDOWEVENT_CLOSE:
+	setVisible(false);
+	break;
+      }
+    }
+    break;
+
+    case SDL_DROPFILE:
+    {
+      const char ** files = (const char **)&event.drop.file;
+      dropCallbackEvent(1, files);
+      SDL_free(event.drop.file);
+    }
+    break;
+    }
+}
+
 bool Screen::keyboardEvent(int key, int scancode, int action, int modifiers) {
     if (mFocusPath.size() > 0) {
         for (auto it = mFocusPath.rbegin() + 1; it != mFocusPath.rend(); ++it)
@@ -427,7 +416,7 @@ bool Screen::cursorPosCallbackEvent(double x, double y) {
     p /= mPixelRatio;
 #endif
     bool ret = false;
-    mLastInteraction = glfwGetTime();
+    mLastInteraction = SDL_GetTicks() / 1000.0;
     try {
         p -= Vector2i(1, 2);
 
@@ -435,7 +424,7 @@ bool Screen::cursorPosCallbackEvent(double x, double y) {
             Widget *widget = findWidget(p);
             if (widget != nullptr && widget->cursor() != mCursor) {
                 mCursor = widget->cursor();
-                glfwSetCursor(mGLFWWindow, mCursors[(int) mCursor]);
+                SDL_SetCursor(mCursors[(int) mCursor]);
             }
         } else {
             ret = mDragWidget->mouseDragEvent(
@@ -457,7 +446,7 @@ bool Screen::cursorPosCallbackEvent(double x, double y) {
 
 bool Screen::mouseButtonCallbackEvent(int button, int action, int modifiers) {
     mModifiers = modifiers;
-    mLastInteraction = glfwGetTime();
+    mLastInteraction = SDL_GetTicks() / 1000.0;
     try {
         if (mFocusPath.size() > 1) {
             const Window *window =
@@ -468,13 +457,13 @@ bool Screen::mouseButtonCallbackEvent(int button, int action, int modifiers) {
             }
         }
 
-        if (action == GLFW_PRESS)
+        if (action == SDL_MOUSEBUTTONDOWN)
             mMouseState |= 1 << button;
         else
             mMouseState &= ~(1 << button);
 
         auto dropWidget = findWidget(mMousePos);
-        if (mDragActive && action == GLFW_RELEASE &&
+        if (mDragActive && action == SDL_MOUSEBUTTONUP &&
             dropWidget != mDragWidget)
             mDragWidget->mouseButtonEvent(
                 mMousePos - mDragWidget->parent()->absolutePosition(), button,
@@ -482,10 +471,10 @@ bool Screen::mouseButtonCallbackEvent(int button, int action, int modifiers) {
 
         if (dropWidget != nullptr && dropWidget->cursor() != mCursor) {
             mCursor = dropWidget->cursor();
-            glfwSetCursor(mGLFWWindow, mCursors[(int) mCursor]);
+	    SDL_SetCursor(mCursors[(int) mCursor]);
         }
 
-        if (action == GLFW_PRESS && (button == GLFW_MOUSE_BUTTON_1 || button == GLFW_MOUSE_BUTTON_2)) {
+        if (action == SDL_MOUSEBUTTONDOWN) {
             mDragWidget = findWidget(mMousePos);
             if (mDragWidget == this)
                 mDragWidget = nullptr;
@@ -497,7 +486,7 @@ bool Screen::mouseButtonCallbackEvent(int button, int action, int modifiers) {
             mDragWidget = nullptr;
         }
 
-        return mouseButtonEvent(mMousePos, button, action == GLFW_PRESS,
+        return mouseButtonEvent(mMousePos, button, action == SDL_MOUSEBUTTONDOWN,
                                 mModifiers);
     } catch (const std::exception &e) {
         std::cerr << "Caught exception in event handler: " << e.what() << std::endl;
@@ -506,7 +495,7 @@ bool Screen::mouseButtonCallbackEvent(int button, int action, int modifiers) {
 }
 
 bool Screen::keyCallbackEvent(int key, int scancode, int action, int mods) {
-    mLastInteraction = glfwGetTime();
+    mLastInteraction = SDL_GetTicks() / 1000.0;
     try {
         return keyboardEvent(key, scancode, action, mods);
     } catch (const std::exception &e) {
@@ -516,7 +505,7 @@ bool Screen::keyCallbackEvent(int key, int scancode, int action, int mods) {
 }
 
 bool Screen::charCallbackEvent(unsigned int codepoint) {
-    mLastInteraction = glfwGetTime();
+    mLastInteraction = SDL_GetTicks() / 1000.0;
     try {
         return keyboardCharacterEvent(codepoint);
     } catch (const std::exception &e) {
@@ -534,7 +523,7 @@ bool Screen::dropCallbackEvent(int count, const char **filenames) {
 }
 
 bool Screen::scrollCallbackEvent(double x, double y) {
-    mLastInteraction = glfwGetTime();
+    mLastInteraction = SDL_GetTicks() / 1000.0;
     try {
         if (mFocusPath.size() > 1) {
             const Window *window =
@@ -554,8 +543,8 @@ bool Screen::scrollCallbackEvent(double x, double y) {
 
 bool Screen::resizeCallbackEvent(int, int) {
     Vector2i fbSize, size;
-    glfwGetFramebufferSize(mGLFWWindow, &fbSize[0], &fbSize[1]);
-    glfwGetWindowSize(mGLFWWindow, &size[0], &size[1]);
+    SDL_GetWindowSize(mSDLWindow, &size[0], &size[1]);
+    SDL_GL_GetDrawableSize(mSDLWindow, &fbSize[0], &fbSize[1]);
 #if defined(_WIN32)
     size /= mPixelRatio;
 #endif
@@ -564,7 +553,7 @@ bool Screen::resizeCallbackEvent(int, int) {
         return false;
 
     mFBSize = fbSize; mSize = size;
-    mLastInteraction = glfwGetTime();
+    mLastInteraction = SDL_GetTicks() / 1000.0;
 
     try {
         return resizeEvent(mSize);

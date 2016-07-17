@@ -1,5 +1,5 @@
 /*
-    nanogui/opengl.h -- Pulls in OpenGL, GLEW (if needed), GLFW, and
+    nanogui/opengl.h -- Pulls in OpenGL, GLEW (if needed), SDL, and
     NanoVG header files
 
     NanoGUI was developed by Wenzel Jakob <wenzel.jakob@epfl.ch>.
@@ -28,7 +28,8 @@
     #endif
 #endif
 
-#include <GLFW/glfw3.h>
+#include <GL/gl.h>
+#include <SDL2/SDL.h>
 #include <nanovg.h>
 
 NAMESPACE_BEGIN(nanogui)

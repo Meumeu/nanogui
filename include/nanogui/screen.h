@@ -1,5 +1,5 @@
 /*
-    nanogui/screen.h -- Top-level widget and interface between NanoGUI and GLFW
+    nanogui/screen.h -- Top-level widget and interface between NanoGUI and SDL
 
     A significant redesign of this code was contributed by Christian Schueller.
 
@@ -14,11 +14,12 @@
 #pragma once
 
 #include <nanogui/widget.h>
+#include <SDL2/SDL_video.h>
 
 NAMESPACE_BEGIN(nanogui)
 
 /**
- * \brief Represents a display surface (i.e. a full-screen or windowed GLFW window)
+ * \brief Represents a display surface (i.e. a full-screen or windowed SDL window)
  * and forms the root element of a hierarchy of nanogui widgets
  */
 class NANOGUI_EXPORT Screen : public Widget {
@@ -122,14 +123,14 @@ public:
     /// Return the last observed mouse position value
     Vector2i mousePos() const { return mMousePos; }
 
-    /// Return a pointer to the underlying GLFW window data structure
-    GLFWwindow *glfwWindow() { return mGLFWWindow; }
+    /// Return a pointer to the underlying SDL window data structure
+    SDL_Window *sdlWindow() { return mSDLWindow; }
 
     /// Return a pointer to the underlying nanoVG draw context
     NVGcontext *nvgContext() { return mNVGContext; }
 
-    void setShutdownGLFWOnDestruct(bool v) { mShutdownGLFWOnDestruct = v; }
-    bool shutdownGLFWOnDestruct() { return mShutdownGLFWOnDestruct; }
+    void setShutdownSDLOnDestruct(bool v) { mShutdownSDLOnDestruct = v; }
+    bool shutdownSDLOnDestruct() { return mShutdownSDLOnDestruct; }
 
     using Widget::performLayout;
 
@@ -139,24 +140,24 @@ public:
     }
 
 public:
-    /********* API for applications which manage GLFW themselves *********/
+    /********* API for applications which manage SDL themselves **********/
 
     /**
      * \brief Default constructor
      *
      * Performs no initialization at all. Use this if the application is
-     * responsible for setting up GLFW, OpenGL, etc.
+     * responsible for setting up SDL, OpenGL, etc.
      *
      * In this case, override \ref Screen and call \ref initalize() with a
-     * pointer to an existing \c GLFWwindow instance
+     * pointer to an existing \c SDL_Window instance
      *
-     * You will also be responsible in this case to deliver GLFW callbacks
+     * You will also be responsible in this case to deliver SDL callbacks
      * to the appropriate callback event handlers below
      */
     Screen();
 
     /// Initialize the \ref Screen
-    void initialize(GLFWwindow *window, bool shutdownGLFWOnDestruct);
+    void initialize(SDL_Window * window, SDL_GLContext context, bool shutdownSDLOnDestruct);
 
     /* Event handlers */
     bool cursorPosCallbackEvent(double x, double y);
@@ -166,6 +167,7 @@ public:
     bool dropCallbackEvent(int count, const char **filenames);
     bool scrollCallbackEvent(double x, double y);
     bool resizeCallbackEvent(int width, int height);
+    void onEvent(SDL_Event& e);
 
     /* Internal helper functions */
     void updateFocus(Widget *widget);
@@ -175,9 +177,10 @@ public:
     void drawWidgets();
 
 protected:
-    GLFWwindow *mGLFWWindow;
+    SDL_Window *mSDLWindow;
+    SDL_GLContext mSDLGLContext;
     NVGcontext *mNVGContext;
-    GLFWcursor *mCursors[(int) Cursor::CursorCount];
+    SDL_Cursor *mCursors[(int) Cursor::CursorCount];
     Cursor mCursor;
     std::vector<Widget *> mFocusPath;
     Vector2i mFBSize;
@@ -190,7 +193,7 @@ protected:
     bool mProcessEvents;
     Vector3f mBackground;
     std::string mCaption;
-    bool mShutdownGLFWOnDestruct;
+    bool mShutdownSDLOnDestruct;
     bool mFullscreen;
 };
 

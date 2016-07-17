@@ -151,7 +151,7 @@ void Window::center() {
 
 bool Window::mouseDragEvent(const Vector2i &, const Vector2i &rel,
                             int button, int /* modifiers */) {
-    if (mDrag && (button & (1 << GLFW_MOUSE_BUTTON_1)) != 0) {
+    if (mDrag && (button & (1 << SDL_BUTTON_LEFT)) != 0) {
         mPos += rel;
         mPos = mPos.cwiseMax(Vector2i::Zero());
         mPos = mPos.cwiseMin(parent()->size() - mSize);
@@ -163,7 +163,7 @@ bool Window::mouseDragEvent(const Vector2i &, const Vector2i &rel,
 bool Window::mouseButtonEvent(const Vector2i &p, int button, bool down, int modifiers) {
     if (Widget::mouseButtonEvent(p, button, down, modifiers))
         return true;
-    if (button == GLFW_MOUSE_BUTTON_1) {
+    if (button == SDL_BUTTON_LEFT) {
         mDrag = down && (p.y() - mPos.y()) < mTheme->mWindowHeaderHeight;
         return true;
     }

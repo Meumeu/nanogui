@@ -64,11 +64,12 @@
 #endif
 
 struct NVGcontext { /* Opaque handle type, never de-referenced within NanoGUI */ };
-struct GLFWwindow { /* Opaque handle type, never de-referenced within NanoGUI */ };
+struct SDL_Window { /* Opaque handle type, never de-referenced within NanoGUI */ };
 
 struct NVGcolor;
 struct NVGglyphPosition;
-struct GLFWcursor;
+struct SDL_Cursor;
+union SDL_Event;
 
 // Define command key for windows/mac/linux
 #ifdef __APPLE__
