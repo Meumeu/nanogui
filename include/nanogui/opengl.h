@@ -1,5 +1,5 @@
 /*
-    nanogui/opengl.h -- Pulls in OpenGL, GLEW (if needed), SDL, and
+    nanogui/opengl.h -- Pulls in OpenGL, GLAD (if needed), SDL, and
     NanoVG header files
 
     NanoGUI was developed by Wenzel Jakob <wenzel.jakob@epfl.ch>.
