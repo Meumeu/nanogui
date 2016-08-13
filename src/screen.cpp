@@ -247,7 +247,12 @@ void Screen::setCaption(const std::string &caption) {
 
 void Screen::setSize(const Vector2i &size) {
     Widget::setSize(size);
+
+#if defined(_WIN32)
+    SDL_SetWindowSize(mSDLWindow, size.x() * mPixelRatio, size.y() * mPixelRatio);
+#else
     SDL_SetWindowSize(mSDLWindow, size.x(), size.y());
+#endif
 }
 
 void Screen::drawAll() {
@@ -285,7 +290,8 @@ void Screen::drawWidgets() {
     glViewport(0, 0, mFBSize[0], mFBSize[1]);
 
     /* Calculate pixel ratio for hi-dpi devices. */
-    mPixelRatio = (float) mFBSize[0] / (float) mSize[0];
+    if (mSize[0])
+        mPixelRatio = (float) mFBSize[0] / (float) mSize[0];
     nvgBeginFrame(mNVGContext, mSize[0], mSize[1], mPixelRatio);
 
     draw(mNVGContext);

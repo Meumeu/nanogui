@@ -64,14 +64,14 @@ bool VScrollPanel::mouseButtonEvent(const Vector2i &p, int button, bool down, in
     if (mChildren.empty())
         return false;
     int shift = (int) (mScroll*(mChildPreferredHeight - mSize.y()));
-    return mChildren[0]->mouseButtonEvent(p + Vector2i(0, shift), button, down, modifiers);
+    return mChildren[0]->mouseButtonEvent(p - mPos + Vector2i(0, shift), button, down, modifiers);
 }
 
 bool VScrollPanel::mouseMotionEvent(const Vector2i &p, const Vector2i &rel, int button, int modifiers) {
     if (mChildren.empty())
         return false;
     int shift = (int) (mScroll*(mChildPreferredHeight - mSize.y()));
-    return mChildren[0]->mouseMotionEvent(p + Vector2i(0, shift), rel, button, modifiers);
+    return mChildren[0]->mouseMotionEvent(p - mPos + Vector2i(0, shift), rel, button, modifiers);
 }
 
 void VScrollPanel::draw(NVGcontext *ctx) {
@@ -84,7 +84,7 @@ void VScrollPanel::draw(NVGcontext *ctx) {
 
     nvgSave(ctx);
     nvgTranslate(ctx, mPos.x(), mPos.y());
-    nvgScissor(ctx, 0, 0, mSize.x(), mSize.y());
+    nvgIntersectScissor(ctx, 0, 0, mSize.x(), mSize.y());
     nvgTranslate(ctx, 0, -mScroll*(mChildPreferredHeight - mSize.y()));
     if (child->visible())
         child->draw(ctx);
