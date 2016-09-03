@@ -204,7 +204,7 @@ public:
         if (mSpinnable && !focused()) {
               int valueDelta = (rel.y() > 0) ? 1 : -1;
               setValue(value() + valueDelta*mValueIncrement);
-              if(mCallback)
+              if (mCallback)
                   mCallback(mValue);
               return true;
         }
@@ -305,7 +305,7 @@ public:
         if (mSpinnable && !focused()) {
             int valueDelta = (rel.y() > 0) ? 1 : -1;
             setValue(value() + valueDelta*mValueIncrement);
-            if(mCallback)
+            if (mCallback)
                 mCallback(mValue);
             return true;
         }
