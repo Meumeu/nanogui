@@ -63,6 +63,22 @@ static float get_pixel_ratio(SDL_Window *window) {
             return std::round(dpiX / 96.0);
     }
     return 1.f;
+#elif defined(__linux__)
+    (void) window;
+
+    /* Try to read the pixel ratio from GTK */
+    FILE *fp = popen("gsettings get org.gnome.desktop.interface scaling-factor", "r");
+    if (!fp)
+        return 1;
+
+    int ratio = 1;
+    if (fscanf(fp, "uint32 %i", &ratio) != 1)
+        return 1;
+
+    if (pclose(fp) != 0)
+        return 1;
+
+    return ratio >= 1 ? ratio : 1;
 #else
     Vector2i fbSize, size;
     SDL_GL_GetDrawableSize(window, &fbSize[0], &fbSize[1]);
@@ -73,7 +89,7 @@ static float get_pixel_ratio(SDL_Window *window) {
 
 Screen::Screen()
   : Widget(nullptr), mSDLWindow(nullptr), mSDLGLContext(nullptr), mNVGContext(nullptr),
-    mCursor(Cursor::Arrow), mBackground(0.3f, 0.3f, 0.32f),
+    mCursor(Cursor::Arrow), mBackground(0.3f, 0.3f, 0.32f, 1.f),
     mShutdownSDLOnDestruct(true), mFullscreen(false) {
     memset(mCursors, 0, sizeof(SDL_Cursor *) * (int) Cursor::CursorCount);}
 
@@ -82,7 +98,7 @@ Screen::Screen(const Vector2i &size, const std::string &caption, bool resizable,
                int stencilBits, int nSamples,
                unsigned int glMajor, unsigned int glMinor)
     : Widget(nullptr), mSDLWindow(nullptr), mSDLGLContext(nullptr), mNVGContext(nullptr),
-      mCursor(Cursor::Arrow), mBackground(0.3f, 0.3f, 0.32f), mCaption(caption),
+      mCursor(Cursor::Arrow), mBackground(0.3f, 0.3f, 0.32f, 1.f), mCaption(caption),
       mShutdownSDLOnDestruct(false), mFullscreen(fullscreen) {
     memset(mCursors, 0, sizeof(SDL_Cursor *) * (int) Cursor::CursorCount);
 
@@ -131,7 +147,7 @@ Screen::Screen(const Vector2i &size, const std::string &caption, bool resizable,
 
     SDL_GL_GetDrawableSize(mSDLWindow, &mFBSize[0], &mFBSize[1]);
     glViewport(0, 0, mFBSize[0], mFBSize[1]);
-    glClearColor(mBackground[0], mBackground[1], mBackground[2], 1.0f);
+    glClearColor(mBackground[0], mBackground[1], mBackground[2], mBackground[3]);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
     SDL_GL_SwapWindow(mSDLWindow);
 
@@ -157,7 +173,7 @@ void Screen::initialize(SDL_Window *window, SDL_GLContext context, bool shutdown
 
     mPixelRatio = get_pixel_ratio(window);
 
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(__linux__)
     if (mPixelRatio != 1 && !mFullscreen)
         SDL_SetWindowSize(window, mSize.x() * mPixelRatio, mSize.y() * mPixelRatio);
 #endif
@@ -248,7 +264,7 @@ void Screen::setCaption(const std::string &caption) {
 void Screen::setSize(const Vector2i &size) {
     Widget::setSize(size);
 
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(__linux__)
     SDL_SetWindowSize(mSDLWindow, size.x() * mPixelRatio, size.y() * mPixelRatio);
 #else
     SDL_SetWindowSize(mSDLWindow, size.x(), size.y());
@@ -256,7 +272,7 @@ void Screen::setSize(const Vector2i &size) {
 }
 
 void Screen::drawAll() {
-    glClearColor(mBackground[0], mBackground[1], mBackground[2], 1.0f);
+    glClearColor(mBackground[0], mBackground[1], mBackground[2], mBackground[3]);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
     drawContents();
@@ -270,28 +286,19 @@ void Screen::drawWidgets() {
         return;
 
     SDL_GL_MakeCurrent(mSDLWindow, mSDLGLContext);
-    SDL_GetWindowSize(mSDLWindow, &mSize[0], &mSize[1]);
-    SDL_GL_GetDrawableSize(mSDLWindow, &mFBSize[0], &mFBSize[1]);
-    float newPixelRatio = get_pixel_ratio(mSDLWindow);
-
-#if defined(_WIN32)
-    if (mPixelRatio != newPixelRatio && !mFullscreen)
-        SDL_SetWindowSize(mSDLWindow, mSize.x() * newPixelRatio / mPixelRatio, mSize.y() * newPixelRatio / mPixelRatio);
-#endif
-
-    mPixelRatio = newPixelRatio;
     SDL_GL_GetDrawableSize(mSDLWindow, &mFBSize[0], &mFBSize[1]);
     SDL_GetWindowSize(mSDLWindow, &mSize[0], &mSize[1]);
 
-#if defined(_WIN32)
-    mSize /= mPixelRatio;
+#if defined(_WIN32) || defined(__linux__)
+    mSize = (mSize / mPixelRatio).cast<int>();
+    mFBSize = (mSize * mPixelRatio).cast<int>();
+#else
+    /* Recompute pixel ratio on OSX */
+    if (mSize[0])
+        mPixelRatio = (float) mFBSize[0] / (float) mSize[0];
 #endif
 
     glViewport(0, 0, mFBSize[0], mFBSize[1]);
-
-    /* Calculate pixel ratio for hi-dpi devices. */
-    if (mSize[0])
-        mPixelRatio = (float) mFBSize[0] / (float) mSize[0];
     nvgBeginFrame(mNVGContext, mSize[0], mSize[1], mPixelRatio);
 
     draw(mNVGContext);
@@ -435,9 +442,11 @@ bool Screen::keyboardCharacterEvent(unsigned int codepoint) {
 
 bool Screen::cursorPosCallbackEvent(double x, double y) {
     Vector2i p((int) x, (int) y);
-#if defined(_WIN32)
+
+#if defined(_WIN32) || defined(__linux__)
     p /= mPixelRatio;
 #endif
+
     bool ret = false;
     mLastInteraction = SDL_GetTicks() / 1000.0;
     try {
@@ -566,9 +575,9 @@ bool Screen::scrollCallbackEvent(double x, double y) {
 
 bool Screen::resizeCallbackEvent(int, int) {
     Vector2i fbSize, size;
-    SDL_GetWindowSize(mSDLWindow, &size[0], &size[1]);
     SDL_GL_GetDrawableSize(mSDLWindow, &fbSize[0], &fbSize[1]);
-#if defined(_WIN32)
+    SDL_GetWindowSize(mSDLWindow, &size[0], &size[1]);
+#if defined(_WIN32) || defined(__linux__)
     size /= mPixelRatio;
 #endif
 

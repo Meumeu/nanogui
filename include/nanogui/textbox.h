@@ -11,6 +11,7 @@
     All rights reserved. Use of this source code is governed by a
     BSD-style license that can be found in the LICENSE.txt file.
 */
+/** \file */
 
 #pragma once
 
@@ -21,8 +22,14 @@
 
 NAMESPACE_BEGIN(nanogui)
 
+/**
+ * \class TextBox textbox.h nanogui/textbox.h
+ *
+ * \brief Fancy text box with builtin regular expression-based validation.
+ */
 class NANOGUI_EXPORT TextBox : public Widget {
 public:
+    /// How to align the text in the text box.
     enum class Alignment {
         Left,
         Center,
@@ -88,6 +95,7 @@ protected:
     int position2CursorIndex(float posx, float lastx,
                              const NVGglyphPosition *glyphs, int size);
 
+    /// The location (if any) for the spin area.
     enum class SpinArea { None, Top, Bottom };
     SpinArea spinArea(const Vector2i & pos);
 
@@ -114,7 +122,16 @@ protected:
     double mLastClick;
 };
 
-template <typename Scalar> class IntBox : public TextBox {
+/**
+ * \class IntBox textbox.h nanogui/textbox.h
+ *
+ * \brief A specialization of TextBox for representing integral values.
+ *
+ * Template parameters should be integral types, e.g. ``int``, ``long``,
+ * ``uint32_t``, etc.
+ */
+template <typename Scalar>
+class IntBox : public TextBox {
 public:
     IntBox(Widget *parent, Scalar value = (Scalar) 0) : TextBox(parent) {
         setDefaultValue("0");
@@ -216,7 +233,16 @@ private:
     Scalar mMinValue, mMaxValue;
 };
 
-template <typename Scalar> class FloatBox : public TextBox {
+/**
+ * \class FloatBox textbox.h nanogui/textbox.h
+ *
+ * \brief A specialization of TextBox representing floating point values.
+
+ * Template parameters should be float types, e.g. ``float``, ``double``,
+ * ``float64_t``, etc.
+ */
+template <typename Scalar>
+class FloatBox : public TextBox {
 public:
     FloatBox(Widget *parent, Scalar value = (Scalar) 0.f) : TextBox(parent) {
         mNumberFormat = sizeof(Scalar) == sizeof(float) ? "%.4g" : "%.7g";
