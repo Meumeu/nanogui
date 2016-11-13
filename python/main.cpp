@@ -7,6 +7,7 @@
 
 #if defined(__APPLE__) || defined(__linux__)
 #  include <coro.h>
+#  include <signal.h>
 #endif
 
 #if defined(__APPLE__) || defined(__linux__)
@@ -44,9 +45,11 @@ extern void register_basics(py::module &m);
 extern void register_button(py::module &m);
 extern void register_tabs(py::module &m);
 extern void register_textbox(py::module &m);
+extern void register_glcanvas(py::module &m);
 extern void register_formhelper(py::module &m);
 extern void register_misc(py::module &m);
 extern void register_glutil(py::module &m);
+extern void register_nanovg(py::module &m);
 
 class MainloopHandle;
 static MainloopHandle *handle = nullptr;
@@ -98,6 +101,15 @@ public:
     }
 };
 
+#if defined(__APPLE__) || defined(__linux__)
+static void (*sigint_handler_prev)(int) = nullptr;
+static void sigint_handler(int sig) {
+    nanogui::leave();
+    signal(sig, sigint_handler_prev);
+    raise(sig);
+}
+#endif
+
 PYBIND11_PLUGIN(nanogui) {
     py::module m("nanogui", "NanoGUI plugin");
 
@@ -146,7 +158,9 @@ PYBIND11_PLUGIN(nanogui) {
                     handle->sema.notify();
 
                     /* Enter main loop */
+                    sigint_handler_prev = signal(SIGINT, sigint_handler);
                     mainloop(handle->refresh);
+                    signal(SIGINT, sigint_handler_prev);
 
                     /* Handshake 2: Wait for signal from new thread */
                     handle->sema.wait();
@@ -174,13 +188,25 @@ PYBIND11_PLUGIN(nanogui) {
 
             return handle;
         } else {
+            py::gil_scoped_release release;
+
+            #if defined(__APPLE__) || defined(__linux__)
+                sigint_handler_prev = signal(SIGINT, sigint_handler);
+            #endif
+
             mainloop(refresh);
+
+            #if defined(__APPLE__) || defined(__linux__)
+                signal(SIGINT, sigint_handler_prev);
+            #endif
+
             return nullptr;
         }
     }, py::arg("refresh") = 50, py::arg("detach") = py::none(),
        D(mainloop), py::keep_alive<0, 2>());
 
     m.def("leave", &nanogui::leave, D(leave));
+    m.def("active", &nanogui::active, D(active));
     m.def("file_dialog", &nanogui::file_dialog, D(file_dialog));
     #if defined(__APPLE__)
         m.def("chdir_to_bundle_parent", &nanogui::chdir_to_bundle_parent);
@@ -206,8 +232,6 @@ PYBIND11_PLUGIN(nanogui) {
         .value("Horizontal", Orientation::Horizontal)
         .value("Vertical", Orientation::Vertical);
 
-    py::class_<NVGcontext> context(m, "NVGcontext");
-
     register_constants(m);
     register_eigen(m);
     register_widget(m);
@@ -216,9 +240,11 @@ PYBIND11_PLUGIN(nanogui) {
     register_button(m);
     register_tabs(m);
     register_textbox(m);
+    register_glcanvas(m);
     register_formhelper(m);
     register_misc(m);
     register_glutil(m);
+    register_nanovg(m);
 
     return m.ptr();
 }

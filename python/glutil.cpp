@@ -48,7 +48,7 @@ static void setUniformPy(GLShader &sh, const std::string &name, py::object arg, 
     py::array value_ = py::array::ensure(arg);
     auto dtype = value_.dtype();
     if (dtype.kind() == 'f') {
-        auto value = py::array_t<float, py::array::forcecast>(value_);
+        auto value = py::array_t<float, py::array::forcecast | py::array::c_style>(value_);
         if (!value.check())
             throw py::type_error("setUniform(): invalid argument!");
 
@@ -144,10 +144,76 @@ void register_glutil(py::module &m) {
         .def("setUniform", &setUniformPy, py::arg("name"),
              py::arg("value"), py::arg("warn") = true);
 
-    #define C(name) gl.attr(#name) = py::int_(GL_##name);
-    py::module gl = m.def_submodule("gl");
+    py::class_<Arcball>(m, "Arcball", D(Arcball))
+        .def(py::init<float>(), py::arg("speedFactor") = 2.f, D(Arcball, Arcball))
+        .def(py::init<const Quaternionf>(), D(Arcball, Arcball, 2))
+        .def("state", &Arcball::state, D(Arcball, state))
+        .def("setState", &Arcball::setState, D(Arcball, setState))
+        .def("size", &Arcball::size, D(Arcball, size))
+        .def("setSize", &Arcball::setSize, D(Arcball, setSize))
+        .def("speedFactor", &Arcball::speedFactor, D(Arcball, speedFactor))
+        .def("setSpeedFactor", &Arcball::setSpeedFactor, D(Arcball, setSpeedFactor))
+        .def("active", &Arcball::active, D(Arcball, active))
+        .def("button", &Arcball::button, py::arg("pos"), py::arg("pressed"), D(Arcball, button))
+        .def("motion", &Arcball::motion, py::arg("pos"), D(Arcball, motion))
+        .def("matrix", &Arcball::matrix, D(Arcball, matrix));
 
-    C(TRIANGLES); C(LINES); C(POINTS);
+    m.def("project", &project, py::arg("obj"), py::arg("model"),
+          py::arg("proj"), py::arg("viewportSize"), D(project));
+
+    m.def("unproject", &unproject, py::arg("win"), py::arg("model"),
+          py::arg("proj"), py::arg("viewportSize"), D(unproject));
+
+    m.def("lookAt", &lookAt, py::arg("origin"), py::arg("target"),
+          py::arg("up"), D(lookAt));
+
+    m.def("ortho", &ortho, py::arg("left"), py::arg("right"), py::arg("bottom"),
+          py::arg("top"), py::arg("zNear"), py::arg("zFar"), D(ortho));
+
+    m.def("frustum", &frustum, py::arg("left"), py::arg("right"), py::arg("bottom"),
+          py::arg("top"), py::arg("nearVal"), py::arg("farVal"), D(frustum));
+
+    m.def("scale", &scale, py::arg("v"), D(scale));
+
+    m.def("translate", &translate, py::arg("v"), D(translate));
+
+    /* Very basic OpenGL coverage */
+
+    #define C(name) gl.attr(#name) = py::int_(GL_##name);
+    py::module gl = m.def_submodule("gl", "OpenGL bindings");
+
+    gl.def("Enable", [](GLenum cap) { glEnable(cap); }, py::arg("cap"));
+    gl.def("Disable", [](GLenum cap) { glDisable(cap); }, py::arg("cap"));
+    gl.def("BlendFunc", [](GLenum sfactor,
+                           GLenum dfactor) { glBlendFunc(sfactor, dfactor); },
+           py::arg("sfactor"), py::arg("dfactor"));
+    gl.def("Scissor", [](GLint x, GLint y, GLsizei w, GLsizei h) { glScissor(x, y, w, h); });
+    gl.def("Cull", [](GLenum mode) { glCullFace(mode); });
+    gl.def("PointSize", [](GLfloat size) { glPointSize(size); });
+    gl.def("LineWidth", [](GLfloat size) { glLineWidth(size); });
+
+    /* Primitive types */
+    C(POINTS); C(LINE_STRIP); C(LINE_LOOP); C(LINES); C(LINE_STRIP_ADJACENCY);
+    C(LINES_ADJACENCY); C(TRIANGLE_STRIP); C(TRIANGLE_FAN); C(TRIANGLES);
+    C(TRIANGLE_STRIP_ADJACENCY); C(TRIANGLES_ADJACENCY);
+
+    /* Depth testing */
+    C(DEPTH_TEST); C(NEVER); C(LESS); C(EQUAL); C(LEQUAL); C(GREATER);
+    C(NOTEQUAL); C(GEQUAL); C(ALWAYS);
+
+    /* Blend functions */
+    C(BLEND); C(ZERO); C(ONE); C(SRC_COLOR); C(DST_COLOR);
+    C(ONE_MINUS_DST_COLOR); C(SRC_ALPHA); C(ONE_MINUS_SRC_ALPHA);
+    C(DST_ALPHA); C(ONE_MINUS_DST_ALPHA); C(CONSTANT_COLOR);
+    C(ONE_MINUS_CONSTANT_COLOR); C(CONSTANT_ALPHA);
+    C(ONE_MINUS_CONSTANT_ALPHA);
+
+    /* Culling functions */
+    C(FRONT); C(BACK); C(FRONT_AND_BACK);
+
+    /* Remaining glEnable/glDisable enums */
+    C(SCISSOR_TEST); C(STENCIL_TEST); C(PROGRAM_POINT_SIZE);
+    C(LINE_SMOOTH); C(POLYGON_SMOOTH); C(CULL_FACE);
 }
 
 #endif

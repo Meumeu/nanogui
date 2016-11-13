@@ -115,6 +115,10 @@ void leave() {
     mainloop_active = false;
 }
 
+bool active() {
+    return mainloop_active;
+}
+
 void shutdown() {
   SDL_Quit();
 }

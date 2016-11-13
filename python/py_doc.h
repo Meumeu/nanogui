@@ -759,6 +759,40 @@ static const char *__doc_nanogui_FormHelper_widgetFontSize = R"doc()doc";
 
 static const char *__doc_nanogui_FormHelper_window = R"doc(Access the currently active Window instance)doc";
 
+static const char *__doc_nanogui_GLCanvas =
+R"doc(Canvas widget for rendering OpenGL content
+
+Canvas widget that can be used to display arbitrary OpenGL content.
+This is useful to display and manipulate 3D objects as part of an
+interactive application. The implementation uses scissoring to ensure
+that rendered objects don't spill into neighboring widgets.
+
+Usage: override `drawGL` in subclasses to provide custom drawing code.)doc";
+
+static const char *__doc_nanogui_GLCanvas_GLCanvas = R"doc()doc";
+
+static const char *__doc_nanogui_GLCanvas_backgroundColor = R"doc(Return the background color)doc";
+
+static const char *__doc_nanogui_GLCanvas_draw = R"doc(Draw the canvas)doc";
+
+static const char *__doc_nanogui_GLCanvas_drawBorder = R"doc(Return whether the widget border gets drawn or not)doc";
+
+static const char *__doc_nanogui_GLCanvas_drawGL = R"doc(Draw the GL scene. Override this method to draw the actual GL content.)doc";
+
+static const char *__doc_nanogui_GLCanvas_drawWidgetBorder = R"doc(Internal helper function for drawing the widget border)doc";
+
+static const char *__doc_nanogui_GLCanvas_load = R"doc()doc";
+
+static const char *__doc_nanogui_GLCanvas_mBackgroundColor = R"doc()doc";
+
+static const char *__doc_nanogui_GLCanvas_mDrawBorder = R"doc()doc";
+
+static const char *__doc_nanogui_GLCanvas_save = R"doc(Save and load widget properties)doc";
+
+static const char *__doc_nanogui_GLCanvas_setBackgroundColor = R"doc(Set the background color)doc";
+
+static const char *__doc_nanogui_GLCanvas_setDrawBorder = R"doc(Set whether to draw the widget border or not)doc";
+
 static const char *__doc_nanogui_GLFramebuffer = R"doc(Helper class for creating framebuffer objects.)doc";
 
 static const char *__doc_nanogui_GLFramebuffer_GLFramebuffer = R"doc(Default constructor: unusable until you call the ``init()`` method)doc";
@@ -875,7 +909,7 @@ Parameter ``geometry_fname``:
     The default value is the empty string, which indicates no geometry
     shader will be used.)doc";
 
-static const char *__doc_nanogui_GLShader_invalidateAttribs = R"doc(Invalidate the version numbers assiciated with attribute data)doc";
+static const char *__doc_nanogui_GLShader_invalidateAttribs = R"doc(Invalidate the version numbers associated with attribute data)doc";
 
 static const char *__doc_nanogui_GLShader_mBufferObjects = R"doc()doc";
 
@@ -1450,9 +1484,19 @@ static const char *__doc_nanogui_PopupButton_save = R"doc()doc";
 
 static const char *__doc_nanogui_PopupButton_setChevronIcon = R"doc()doc";
 
+static const char *__doc_nanogui_PopupButton_setSide = R"doc()doc";
+
+static const char *__doc_nanogui_PopupButton_side = R"doc()doc";
+
 static const char *__doc_nanogui_Popup_Popup =
 R"doc(Create a new popup parented to a screen (first argument) and a parent
 window)doc";
+
+static const char *__doc_nanogui_Popup_Side = R"doc()doc";
+
+static const char *__doc_nanogui_Popup_Side_Left = R"doc()doc";
+
+static const char *__doc_nanogui_Popup_Side_Right = R"doc()doc";
 
 static const char *__doc_nanogui_Popup_anchorHeight =
 R"doc(Return the anchor height; this determines the vertical shift relative
@@ -1471,6 +1515,8 @@ static const char *__doc_nanogui_Popup_mAnchorHeight = R"doc()doc";
 static const char *__doc_nanogui_Popup_mAnchorPos = R"doc()doc";
 
 static const char *__doc_nanogui_Popup_mParentWindow = R"doc()doc";
+
+static const char *__doc_nanogui_Popup_mSide = R"doc()doc";
 
 static const char *__doc_nanogui_Popup_parentWindow = R"doc(Return the parent window of the popup)doc";
 
@@ -1491,6 +1537,10 @@ the anchor position)doc";
 static const char *__doc_nanogui_Popup_setAnchorPos =
 R"doc(Return the anchor position in the parent window; the placement of the
 popup is relative to it)doc";
+
+static const char *__doc_nanogui_Popup_setSide = R"doc(Set the side of the parent window at which popup will appear)doc";
+
+static const char *__doc_nanogui_Popup_side = R"doc(Return the side of the parent window at which popup will appear)doc";
 
 static const char *__doc_nanogui_ProgressBar = R"doc(Standard widget for visualizing progress.)doc";
 
@@ -1692,8 +1742,6 @@ static const char *__doc_nanogui_Slider_highlightColor = R"doc()doc";
 
 static const char *__doc_nanogui_Slider_highlightedRange = R"doc()doc";
 
-static const char *__doc_nanogui_Slider_range = R"doc()doc";
-
 static const char *__doc_nanogui_Slider_load = R"doc()doc";
 
 static const char *__doc_nanogui_Slider_mCallback = R"doc()doc";
@@ -1704,6 +1752,8 @@ static const char *__doc_nanogui_Slider_mHighlightColor = R"doc()doc";
 
 static const char *__doc_nanogui_Slider_mHighlightedRange = R"doc()doc";
 
+static const char *__doc_nanogui_Slider_mRange = R"doc()doc";
+
 static const char *__doc_nanogui_Slider_mValue = R"doc()doc";
 
 static const char *__doc_nanogui_Slider_mouseButtonEvent = R"doc()doc";
@@ -1711,6 +1761,8 @@ static const char *__doc_nanogui_Slider_mouseButtonEvent = R"doc()doc";
 static const char *__doc_nanogui_Slider_mouseDragEvent = R"doc()doc";
 
 static const char *__doc_nanogui_Slider_preferredSize = R"doc()doc";
+
+static const char *__doc_nanogui_Slider_range = R"doc()doc";
 
 static const char *__doc_nanogui_Slider_save = R"doc()doc";
 
@@ -2218,11 +2270,9 @@ static const char *__doc_nanogui_VScrollPanel_mChildPreferredHeight = R"doc()doc
 
 static const char *__doc_nanogui_VScrollPanel_mScroll = R"doc()doc";
 
-static const char *__doc_nanogui_VScrollPanel_mouseButtonEvent = R"doc()doc";
+static const char *__doc_nanogui_VScrollPanel_mUpdateLayout = R"doc()doc";
 
 static const char *__doc_nanogui_VScrollPanel_mouseDragEvent = R"doc()doc";
-
-static const char *__doc_nanogui_VScrollPanel_mouseMotionEvent = R"doc()doc";
 
 static const char *__doc_nanogui_VScrollPanel_performLayout = R"doc()doc";
 
@@ -2489,6 +2539,8 @@ static const char *__doc_nanogui_Window_setTitle = R"doc(Set the window title)do
 
 static const char *__doc_nanogui_Window_title = R"doc(Return the window title)doc";
 
+static const char *__doc_nanogui_active = R"doc(Return whether or not a main loop is currently active)doc";
+
 static const char *__doc_nanogui_chdir_to_bundle_parent =
 R"doc(Move to the application bundle's parent directory
 
@@ -2628,13 +2680,14 @@ R"doc(Load a directory of PNG images and upload them to the GPU (suitable
 for use with ImagePanel))doc";
 
 static const char *__doc_nanogui_lookAt =
-R"doc(Creates a "look at" matrix for modeling say a camera.
+R"doc(Creates a "look at" matrix that describes the position and orientation
+of e.g. a camera
 
-Parameter ``eye``:
+Parameter ``origin``:
     The position of the camera.
 
-Parameter ``center``:
-    The gaze direction of the camera.
+Parameter ``target``:
+    The gaze target of the camera.
 
 Parameter ``up``:
     The up vector of the camera.
@@ -2642,9 +2695,7 @@ Parameter ``up``:
 ```
 Warning:
 These are used to form an orthonormal basis.  The first basis vector is
-defined as ``f = (center - eye).normalized()``, so ``eye`` cannot be
-equal to ``center``.  Additionally, ``center`` and ``up`` should be
-perpendicular.
+defined as ``f = (target - origin).normalized()``.
 
 ```)doc";
 
@@ -2712,10 +2763,10 @@ Parameter ``bottom``:
 Parameter ``top``:
     The top border of the viewport.
 
-Parameter ``zNear``:
+Parameter ``nearVal``:
     The near plane.
 
-Parameter ``zFar``:
+Parameter ``farVal``:
     The far plane.)doc";
 
 static const char *__doc_nanogui_project =
@@ -2790,15 +2841,11 @@ static const char *__doc_nanogui_ref_ref_3 = R"doc(Copy constructor)doc";
 static const char *__doc_nanogui_ref_ref_4 = R"doc(Move constructor)doc";
 
 static const char *__doc_nanogui_scale =
-R"doc(Convenience column-wise matrix scaling function.
+R"doc(Construct homogeneous coordinate scaling matrix
 
-Returns a matrix that is the piecewise scaling of m's columns with
-vector v. Column 0 of ``m`` is scaled by ``v(0)``, column 1 by
-``v(1)``, and column 2 by ``v(2)``. Column 3 is the original column 3
-of ``m``.
-
-Parameter ``m``:
-    The matrix that will be copied and then scaled for the return.
+Returns a 3D homogeneous coordinate matrix that scales the X, Y, and Z
+components with the corresponding entries of the 3D vector ``v``. The
+``w`` component is left unchanged
 
 Parameter ``v``:
     The vector representing the scaling for each axis.)doc";
@@ -2806,12 +2853,11 @@ Parameter ``v``:
 static const char *__doc_nanogui_shutdown = R"doc(Static shutdown; should be called before the application terminates.)doc";
 
 static const char *__doc_nanogui_translate =
-R"doc(Convenience matrix translation function.
+R"doc(Construct homogeneous coordinate translation matrix
 
-Returns a matrix that is the translation of m by v.
-
-Parameter ``m``:
-    The matrix that will be copied and then translated.
+Returns a 3D homogeneous coordinate matrix that translates the X, Y,
+and Z components by the corresponding entries of the 3D vector ``v``.
+The ``w`` component is left unchanged
 
 Parameter ``v``:
     The vector representing the translation for each axis.)doc";
