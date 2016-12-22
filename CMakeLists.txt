@@ -40,6 +40,7 @@ if(APPLE AND NANOGUI_BUILD_SHARED)
 endif()
 
 include(CheckCXXCompilerFlag)
+include(CheckCXXSourceRuns)
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   message(STATUS "Setting build type to 'Release' as none was specified.")
@@ -49,6 +50,14 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 string(TOUPPER "${CMAKE_BUILD_TYPE}" U_CMAKE_BUILD_TYPE)
 
+macro(CHECK_CXX_COMPILER_AND_LINKER_FLAGS _RESULT _CXX_FLAGS _LINKER_FLAGS)
+  set(CMAKE_REQUIRED_FLAGS ${_CXX_FLAGS})
+  set(CMAKE_REQUIRED_LIBRARIES ${_LINKER_FLAGS})
+  set(CMAKE_REQUIRED_QUIET TRUE)
+  check_cxx_source_runs("int main(int argc, char **argv) { return 0; }" ${_RESULT})
+  set(CMAKE_REQUIRED_FLAGS "")
+  set(CMAKE_REQUIRED_LIBRARIES "")
+endmacro()
 set(BUILD_SHARED_LIBS ${NANOGUI_BUILD_SHARED} CACHE BOOL " " FORCE)
 
 if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -59,6 +68,7 @@ endif()
 if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
    add_definitions(-Wno-ignored-attributes -Wno-deprecated-declarations -Wno-misleading-indentation)
 endif()
+
 
 # Python support: add NANOGUI_PYTHON flag to all targets
 if (NANOGUI_BUILD_PYTHON)
@@ -119,41 +129,28 @@ if (NANOGUI_BUILD_SHARED)
 
     # Enable link time optimization
     if (NOT CMAKE_CXX_FLAGS MATCHES "-flto")
-      set(BACKUP_C_FLAGS ${CMAKE_CXX_FLAGS})
-      set(BACKUP_CXX_FLAGS ${CMAKE_C_FLAGS})
-      set(BACKUP_EXE_LINKER_FLAGS ${CMAKE_EXE_LINKER_FLAGS})
-      set(BACKUP_SHARED_LINKER_FLAGS ${CMAKE_SHARED_LINKER_FLAGS})
-
       if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-        set(CMAKE_EXE_LINKER_FLAGS "-flto=thin ${CMAKE_EXE_LINKER_FLAGS}")
-        set(CMAKE_SHARED_LINKER_FLAGS "-flto=thin ${CMAKE_SHARED_LINKER_FLAGS}")
-        set(CMAKE_CXX_FLAGS "-flto=thin ${CMAKE_CXX_FLAGS}")
-        set(CMAKE_C_FLAGS "-flto=thin ${CMAKE_C_FLAGS}")
+        set(LTO_CXX_FLAGS "-flto=thin")
+        set(LTO_LINKER_FLAGS "-flto=thin")
         if (NOT APPLE AND U_CMAKE_BUILD_TYPE MATCHES MINSIZEREL)
             # Clang Gold plugin does not support -Os
-            set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -O3")
-            set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -O3")
+            set(LTO_CXX_FLAGS "${LTO_CXX_FLAGS} -O3")
         endif()
       else()
-        set(CMAKE_EXE_LINKER_FLAGS "-flto ${CMAKE_EXE_LINKER_FLAGS}")
-        set(CMAKE_SHARED_LINKER_FLAGS "-flto ${CMAKE_SHARED_LINKER_FLAGS}")
-        set(CMAKE_CXX_FLAGS "-flto -fno-fat-lto-objects ${CMAKE_CXX_FLAGS}")
-        set(CMAKE_C_FLAGS "-flto -fno-fat-lto-objects ${CMAKE_C_FLAGS}")
+        set(LTO_CXX_FLAGS "-flto -fno-fat-lto-objects")
+        set(LTO_LINKER_FLAGS "-flto")
       endif()
 
-      file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_FILES_DIRECTORY}/CMakeTmp/test.c "int main(int argc, char **argv) { return 0; }")
-      try_compile(HAS_LTO
-        ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_FILES_DIRECTORY}/CMakeTmp
-        ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_FILES_DIRECTORY}/CMakeTmp/test.c)
+      CHECK_CXX_COMPILER_AND_LINKER_FLAGS(HAS_LTO ${LTO_CXX_FLAGS} ${LTO_LINKER_FLAGS})
 
       if (HAS_LTO)
         message(STATUS "NanoGUI: LTO support enabled.")
+        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${LTO_LINKER_FLAGS}")
+        set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${LTO_LINKER_FLAGS}")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${LTO_CXX_FLAGS}")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${LTO_CXX_FLAGS}")
       else()
         message(STATUS "NanoGUI: LTO not supported by the compiler.")
-        set(CMAKE_C_FLAGS ${BACKUP_CXX_FLAGS})
-        set(CMAKE_CXX_FLAGS ${BACKUP_C_FLAGS})
-        set(CMAKE_EXE_LINKER_FLAGS ${BACKUP_EXE_LINKER_FLAGS})
-        set(CMAKE_SHARED_LINKER_FLAGS ${BACKUP_SHARED_LINKER_FLAGS})
       endif()
     endif()
   elseif(MSVC)
@@ -163,7 +160,6 @@ if (NANOGUI_BUILD_SHARED)
       set("CMAKE_CXX_FLAGS_${Configuration}" "${CMAKE_CXX_FLAGS_${Configuration}} /GL")
       foreach(LinkType ${LinkTypes})
         set("CMAKE_${LinkType}_LINKER_FLAGS_${Configuration}" "${CMAKE_${LinkType}_LINKER_FLAGS_${Configuration}} /LTCG")
-        message(STATUS CMAKE_${LinkType}_LINKER_FLAGS_${Configuration})
       endforeach()
     endforeach()
     message(STATUS "NanoGUI: LTO support enabled.")
@@ -171,13 +167,22 @@ if (NANOGUI_BUILD_SHARED)
 endif()
 
 # Always use libc++ on Clang
-if (CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND NOT ${CMAKE_SYSTEM_NAME} MATCHES "BSD")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
-  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -stdlib=libc++")
-  set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -stdlib=libc++")
-  if(APPLE OR CMAKE_SYSTEM MATCHES "Linux")
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lc++abi")
-    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -lc++abi")
+if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  CHECK_CXX_COMPILER_AND_LINKER_FLAGS(HAS_LIBCPP "-stdlib=libc++" "-stdlib=libc++")
+  if (HAS_LIBCPP)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -stdlib=libc++")
+    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -stdlib=libc++")
+    CHECK_CXX_COMPILER_AND_LINKER_FLAGS(HAS_LIBCPPABI "-stdlib=libc++" "-stdlib=libc++ -lc++abi")
+    if(HAS_LIBCPPABI)
+      set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lc++abi")
+      set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -lc++abi")
+      message(STATUS "NanoGUI: using libc++ and libc++abi.")
+    else()
+      message(STATUS "NanoGUI: using libc++.")
+    endif()
+  else()
+    message(STATUS "NanoGUI: NOT using libc++.")
   endif()
 endif()
 
@@ -236,19 +241,28 @@ endif()
 
 include_directories(${NANOGUI_EIGEN_INCLUDE_DIR} ext/nanovg/src include ${CMAKE_CURRENT_BINARY_DIR})
 
-# Run simple C converter to put font files into the data segment
-add_executable(bin2c resources/bin2c.c)
-set(bin2c_cmdline nanogui_resources.cpp nanogui_resources.h)
+
+# Run simple cmake converter to put font files into the data segment
+
+# Glob up resource files
 file(GLOB resources "${CMAKE_CURRENT_SOURCE_DIR}/resources/*.ttf")
-foreach(file ${resources})
-  list(APPEND bin2c_cmdline ${file})
-endforeach()
+
+# Concatenate resource files into a comma separated string
+string (REGEX REPLACE "([^\\]|^);" "\\1," resources_string "${resources}")
+string (REGEX REPLACE "[\\](.)" "\\1" resources_string "${resources_string}")
+
+# Create command line for running bin2c cmake script
+set(bin2c_cmdline
+  -DOUTPUT_C=nanogui_resources.cpp
+  -DOUTPUT_H=nanogui_resources.h
+  "-DINPUT_FILES=${resources_string}"
+  -P "${CMAKE_CURRENT_SOURCE_DIR}/resources/bin2c.cmake")
 
 # Run bin2c on resource files
 add_custom_command(
   OUTPUT nanogui_resources.cpp nanogui_resources.h
-  COMMAND $<TARGET_FILE:bin2c> ARGS ${bin2c_cmdline}
-  DEPENDS bin2c ${resources}
+  COMMAND ${CMAKE_COMMAND} ARGS ${bin2c_cmdline}
+  DEPENDS ${resources}
   COMMENT "Running bin2c"
   PRE_BUILD VERBATIM)
 
@@ -388,11 +402,6 @@ if(NANOGUI_BUILD_EXAMPLE)
 
   # Copy icons for example application
   file(COPY resources/icons DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
-
-  if (NANOGUI_INSTALL)
-    install(TARGETS example1 example2 example3 example4
-            RUNTIME DESTINATION bin)
-  endif()
 endif()
 
 if (NANOGUI_BUILD_PYTHON)
@@ -400,8 +409,8 @@ if (NANOGUI_BUILD_PYTHON)
 
   # Try to autodetect Python (can be overridden manually if needed)
   list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/ext/pybind11/tools")
-  set(Python_ADDITIONAL_VERSIONS 3.4 3.5 3.6 3.7)
-  find_package(PythonLibsNew ${MITSUBA_PYTHON_VERSION})
+  set(Python_ADDITIONAL_VERSIONS 3.7 3.6 3.5 3.4)
+  find_package(PythonLibsNew ${NANOGUI_PYTHON_VERSION})
   if (NOT PYTHONLIBS_FOUND)
     # Python not found -- disable the plugin
     set(NANOGUI_BUILD_PYTHON OFF CACHE BOOL "Build a Python plugin for NanoGUI?" FORCE)

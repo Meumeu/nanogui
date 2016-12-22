@@ -221,6 +221,10 @@ void Screen::initialize(SDL_Window *window, SDL_GLContext context, bool shutdown
     mCursors[(int)Cursor::Hand] = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_HAND);
     mCursors[(int)Cursor::HResize] = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_SIZEWE);
     mCursors[(int)Cursor::VResize] = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_SIZENS);
+
+    /// Fixes retina display-related font rendering issue (#185)
+    nvgBeginFrame(mNVGContext, mSize[0], mSize[1], mPixelRatio);
+    nvgEndFrame(mNVGContext);
 }
 
 Screen::~Screen() {
@@ -441,6 +445,14 @@ bool Screen::keyboardCharacterEvent(unsigned int codepoint) {
     return false;
 }
 
+bool Screen::resizeEvent(const Vector2i& size) {
+    if (mResizeCallback) {
+        mResizeCallback(size);
+        return true;
+    }
+    return false;
+}
+
 bool Screen::cursorPosCallbackEvent(double x, double y) {
     Vector2i p((int) x, (int) y);
 
@@ -473,7 +485,7 @@ bool Screen::cursorPosCallbackEvent(double x, double y) {
         return ret;
     } catch (const std::exception &e) {
         std::cerr << "Caught exception in event handler: " << e.what() << std::endl;
-        abort();
+        return false;
     }
 }
 
@@ -523,7 +535,7 @@ bool Screen::mouseButtonCallbackEvent(int button, int action, int modifiers) {
                                 mModifiers);
     } catch (const std::exception &e) {
         std::cerr << "Caught exception in event handler: " << e.what() << std::endl;
-        abort();
+        return false;
     }
 }
 
@@ -533,7 +545,7 @@ bool Screen::keyCallbackEvent(int key, int scancode, int action, int mods) {
         return keyboardEvent(key, scancode, action, mods);
     } catch (const std::exception &e) {
         std::cerr << "Caught exception in event handler: " << e.what() << std::endl;
-        abort();
+        return false;
     }
 }
 
@@ -544,7 +556,7 @@ bool Screen::charCallbackEvent(unsigned int codepoint) {
     } catch (const std::exception &e) {
         std::cerr << "Caught exception in event handler: " << e.what()
                   << std::endl;
-        abort();
+        return false;
     }
 }
 
@@ -570,7 +582,7 @@ bool Screen::scrollCallbackEvent(double x, double y) {
     } catch (const std::exception &e) {
         std::cerr << "Caught exception in event handler: " << e.what()
                   << std::endl;
-        abort();
+        return false;
     }
 }
 
@@ -593,7 +605,7 @@ bool Screen::resizeCallbackEvent(int, int) {
     } catch (const std::exception &e) {
         std::cerr << "Caught exception in event handler: " << e.what()
                   << std::endl;
-        abort();
+        return false;
     }
 }
 

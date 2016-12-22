@@ -120,6 +120,8 @@ protected:
     int mMouseDownModifier;
     float mTextOffset;
     double mLastClick;
+public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };
 
 /**
@@ -231,6 +233,8 @@ private:
     Scalar mMouseDownValue;
     Scalar mValueIncrement;
     Scalar mMinValue, mMaxValue;
+public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };
 
 /**
@@ -343,6 +347,8 @@ private:
     Scalar mMouseDownValue;
     Scalar mValueIncrement;
     Scalar mMinValue, mMaxValue;
+public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };
 
 NAMESPACE_END(nanogui)

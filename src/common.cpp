@@ -31,10 +31,18 @@ NAMESPACE_BEGIN(nanogui)
 
 extern std::map<Uint32, Screen *> __nanogui_screens;
 
+#if defined(__APPLE__)
+  extern void disable_saved_application_state_osx();
+#endif
+
 void init() {
     #if !defined(_WIN32)
         /* Avoid locale-related number parsing issues */
         setlocale(LC_NUMERIC, "C");
+    #endif
+
+    #if defined(__APPLE__)
+        disable_saved_application_state_osx();
     #endif
 
     SDL_SetMainReady();
@@ -107,7 +115,7 @@ void mainloop(int /*refresh*/) {
         }
     } catch (const std::exception &e) {
         std::cerr << "Caught exception in main loop: " << e.what() << std::endl;
-        abort();
+        leave();
     }
 }
 
